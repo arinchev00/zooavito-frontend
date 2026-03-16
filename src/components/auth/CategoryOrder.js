@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useCategoryOrder } from '../../context/CategoryOrderContext';
 import { useCategories } from '../../context/CategoryContext';
+import { updateCategoryOrder, hideCategory, showCategory, getAllCategoriesForAdmin } from '../../api/categories';
 import {
   DndContext,
   closestCenter,
@@ -27,8 +27,7 @@ import './CategoryOrder.css';
 const CategoryOrder = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const { categories, refreshCategories } = useCategories();
-  const { categoryOrder, updateCategoryOrder, hiddenCategories, toggleCategoryVisibility } = useCategoryOrder();
+  const { refreshCategories } = useCategories();
   
   const [orderedCategories, setOrderedCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,8 +35,6 @@ const CategoryOrder = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeId, setActiveId] = useState(null);
-  
-  const initialLoadDone = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -52,60 +49,37 @@ const CategoryOrder = () => {
 
   // Проверка прав доступа
   useEffect(() => {
-    if (!isAuthenticated || user?.email !== 'admin123@admin.com') {
+    if (!isAuthenticated || user?.role !== 'ROLE_ADMIN') {
       navigate('/announcements');
     }
   }, [isAuthenticated, user, navigate]);
 
-  // Загружаем данные только один раз при монтировании
+  // Загружаем категории для админ-панели (включая скрытые)
   useEffect(() => {
-    const loadInitialData = async () => {
-      if (initialLoadDone.current) return;
-      
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
       setLoading(true);
-      try {
-        if (refreshCategories) {
-          await refreshCategories();
-        }
-        initialLoadDone.current = true;
-      } catch (error) {
-        console.error('Ошибка при загрузке категорий:', error);
-        setError('Не удалось загрузить категории');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadInitialData();
-  }, []); // Пустой массив зависимостей - выполнится только один раз
-
-  // Применяем сохраненный порядок к категориям
-  useEffect(() => {
-    if (categories && categories.length > 0) {
-      let sorted = [...categories];
-      
-      if (categoryOrder.length > 0) {
-        sorted.sort((a, b) => {
-          const indexA = categoryOrder.indexOf(a.id);
-          const indexB = categoryOrder.indexOf(b.id);
-          
-          if (indexA === -1 && indexB === -1) return a.id - b.id;
-          if (indexA === -1) return 1;
-          if (indexB === -1) return -1;
-          return indexA - indexB;
-        });
-      }
-      
+      const response = await getAllCategoriesForAdmin();
+      // Сортируем по displayOrder на клиенте для уверенности
+      const sorted = [...response.data].sort((a, b) => 
+        (a.displayOrder ?? 0) - (b.displayOrder ?? 0)
+      );
       setOrderedCategories(sorted);
+    } catch (error) {
+      console.error('Ошибка при загрузке категорий:', error);
+      setError('Не удалось загрузить категории');
+    } finally {
+      setLoading(false);
     }
-  }, [categories, categoryOrder]);
+  };
 
-  // Начало перетаскивания
   const handleDragStart = (event) => {
     setActiveId(event.active.id);
   };
 
-  // Обработка перетаскивания
   const handleDragEnd = (event) => {
     const { active, over } = event;
     setActiveId(null);
@@ -116,25 +90,31 @@ const CategoryOrder = () => {
       setOrderedCategories((items) => {
         const oldIndex = items.findIndex((item) => item.id === active.id);
         const newIndex = items.findIndex((item) => item.id === over.id);
-        
-        console.log('Перемещение:', {
-          item: items[oldIndex].title,
-          from: oldIndex,
-          to: newIndex
-        });
-        
         return arrayMove(items, oldIndex, newIndex);
       });
     }
   };
 
-  // Сохранение порядка
-  const handleSaveOrder = () => {
+  const handleSaveOrder = async () => {
     try {
       setSaving(true);
+      setError('');
       
-      const newOrder = orderedCategories.map(cat => cat.id);
-      updateCategoryOrder(newOrder);
+      // Подготавливаем данные для отправки на сервер
+      const orderData = orderedCategories.map((category, index) => ({
+        id: category.id,
+        order: index
+      }));
+
+      console.log('Saving order:', orderData);
+      
+      // Отправляем на сервер
+      await updateCategoryOrder(orderData);
+      
+      // Обновляем категории в контексте
+      if (refreshCategories) {
+        await refreshCategories();
+      }
       
       setSuccess('Порядок категорий успешно сохранен');
       setTimeout(() => setSuccess(''), 3000);
@@ -146,23 +126,42 @@ const CategoryOrder = () => {
     }
   };
 
-  // Сброс к исходному порядку (по id)
+  const handleToggleVisibility = async (categoryId) => {
+    try {
+      const category = orderedCategories.find(c => c.id === categoryId);
+      if (category.isHidden) {
+        await showCategory(categoryId);
+      } else {
+        await hideCategory(categoryId);
+      }
+      
+      // Обновляем список категорий
+      await loadCategories();
+      
+      // Обновляем категории в контексте
+      if (refreshCategories) {
+        await refreshCategories();
+      }
+      
+      setSuccess(`Категория ${category.isHidden ? 'показана' : 'скрыта'}`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      console.error('Ошибка при изменении видимости:', error);
+      setError('Не удалось изменить видимость категории');
+    }
+  };
+
   const handleReset = () => {
-    const defaultOrder = [...categories].sort((a, b) => a.id - b.id);
+    // Сброс к порядку по умолчанию (по id)
+    const defaultOrder = [...orderedCategories].sort((a, b) => a.id - b.id);
     setOrderedCategories(defaultOrder);
-    updateCategoryOrder(defaultOrder.map(c => c.id));
   };
 
-  // Переключение видимости категории
-  const handleToggleVisibility = (categoryId) => {
-    toggleCategoryVisibility(categoryId);
-  };
-
-  if (!isAuthenticated || user?.email !== 'admin123@admin.com') {
+  if (!isAuthenticated || user?.role !== 'ROLE_ADMIN') {
     return null;
   }
 
-  if (loading && !orderedCategories.length) {
+  if (loading) {
     return (
       <div className="category-order-page">
         <div className="container">
@@ -219,7 +218,7 @@ const CategoryOrder = () => {
                     id={category.id} 
                     category={category}
                     index={index}
-                    isHidden={hiddenCategories.includes(category.id)}
+                    isHidden={category.isHidden}
                     onToggleVisibility={handleToggleVisibility}
                   />
                 ))}
@@ -256,7 +255,7 @@ const CategoryOrder = () => {
           <h3>Как это будет выглядеть в шапке:</h3>
           <div className="preview-header">
             {orderedCategories
-              .filter(cat => !hiddenCategories.includes(cat.id))
+              .filter(cat => !cat.isHidden)
               .slice(0, 5)
               .map((cat, index, filtered) => (
                 <span key={cat.id} className="preview-item">
@@ -264,7 +263,7 @@ const CategoryOrder = () => {
                   {index < filtered.length - 1 && ' | '}
                 </span>
               ))}
-            {orderedCategories.filter(cat => !hiddenCategories.includes(cat.id)).length > 5 && (
+            {orderedCategories.filter(cat => !cat.isHidden).length > 5 && (
               <span className="preview-more">...</span>
             )}
           </div>

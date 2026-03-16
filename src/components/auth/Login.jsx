@@ -29,15 +29,43 @@ const Login = () => {
     try {
       const response = await login(formData);
       const { token, user } = response.data;
-      authLogin(token, user);
+      
+      console.log('Данные пользователя:', user);
+      
+      authLogin(token, {
+        id: user.id,
+        fullName: user.fullName,
+        phone: user.telephoneNumber,
+        role: user.roles?.[0] || 'USER',
+        email: user.email
+      });
+      
       navigate('/home');
     } catch (error) {
-      if (error.response?.status === 401) {
-        setError('Неверный email или пароль');
+      console.error('Login error:', error);
+      console.error('Error response data:', error.response?.data);
+      
+      // Проверяем наличие сообщения в ответе
+      if (error.response?.data) {
+        // Проверяем поле account (оно приходит с бэкенда)
+        if (error.response.data.account) {
+          setError(error.response.data.account);
+        }
+        // Проверяем поле message
+        else if (error.response.data.message) {
+          setError(error.response.data.message);
+        }
+        // Если это строка
+        else if (typeof error.response.data === 'string') {
+          setError(error.response.data);
+        }
+        // Если ничего не нашли
+        else {
+          setError('Ошибка при входе. Проверьте email и пароль.');
+        }
       } else {
         setError('Ошибка при входе. Попробуйте позже.');
       }
-      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }

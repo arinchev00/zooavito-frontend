@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useCategories } from '../../context/CategoryContext';
+import { useCategoryOrder } from '../../context/CategoryOrderContext'; // Добавляем импорт
 
 const AnnouncementFilter = ({ initialFilters = {}, onFilterChange }) => {
-  const { categories } = useCategories(); // ← используем контекст
+  const { categories } = useCategories();
+  const { getVisibleCategories } = useCategoryOrder(); // Получаем функцию для сортировки
+  
   const [subcategories, setSubcategories] = useState([]);
+  const [sortedCategories, setSortedCategories] = useState([]); // Новое состояние
   const [filters, setFilters] = useState({
     categoryId: initialFilters.categoryId || '',
     subcategoryId: initialFilters.subcategoryId || '',
     minPrice: initialFilters.minPrice || '',
     maxPrice: initialFilters.maxPrice || ''
   });
+
+  // Сортируем категории согласно порядку из контекста
+  useEffect(() => {
+    if (categories && categories.length > 0) {
+      const visible = getVisibleCategories(categories);
+      setSortedCategories(visible);
+    }
+  }, [categories, getVisibleCategories]);
 
   useEffect(() => {
     if (filters.categoryId) {
@@ -77,7 +89,7 @@ const AnnouncementFilter = ({ initialFilters = {}, onFilterChange }) => {
               onChange={handleFilterChange}
             >
               <option value="">Все категории</option>
-              {categories.map(cat => (
+              {sortedCategories.map(cat => ( // Используем sortedCategories вместо categories
                 <option key={cat.id} value={cat.id}>{cat.title}</option>
               ))}
             </select>

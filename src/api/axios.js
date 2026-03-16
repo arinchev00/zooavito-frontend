@@ -1,12 +1,8 @@
 import axios from 'axios';
 
 const instance = axios.create({
-  baseURL: 'http://localhost:8081/v1/api', // ваш бэкенд
+  baseURL: 'http://localhost:8081/v1/api',
   timeout: 10000,
-  // ❌ УДАЛИТЕ эту строку:
-  // headers: {
-  //   'Content-Type': 'application/json',
-  // },
 });
 
 // Добавляем токен к каждому запросу
@@ -16,12 +12,7 @@ instance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log('Making request to:', config.url); // для отладки
-    
-    // ✅ НЕ устанавливайте Content-Type принудительно!
-    // Пусть axios сам решает, какой Content-Type нужен
-    // для FormData это будет multipart/form-data с правильной границей
-    
+    console.log('Making request to:', config.url);
     return config;
   },
   (error) => {
@@ -32,15 +23,26 @@ instance.interceptors.request.use(
 // Обрабатываем ответы
 instance.interceptors.response.use(
   (response) => {
-    console.log('Response received:', response.status); // для отладки
+    console.log('Response received:', response.status);
     return response;
   },
   (error) => {
     console.error('API Error:', error.response?.status, error.message);
-    if (error.response?.status === 401) {
+    
+    // Если пользователь заблокирован (403)
+    if (error.response?.status === 403) {
+      console.log('User is blocked, logging out...');
       localStorage.removeItem('token');
+      localStorage.removeItem('userData');
+      window.location.href = '/login?blocked=true';
+    }
+    // Если не авторизован (401)
+    else if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userData');
       window.location.href = '/login';
     }
+    
     return Promise.reject(error);
   }
 );

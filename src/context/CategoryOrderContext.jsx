@@ -1,26 +1,38 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { getAllCategories } from '../api/categories';
 
 const CategoryOrderContext = createContext();
 
 export const useCategoryOrder = () => useContext(CategoryOrderContext);
 
 export const CategoryOrderProvider = ({ children }) => {
-  // Загружаем настройки из localStorage при инициализации
-  const [categoryOrder, setCategoryOrder] = useState(() => {
-    const saved = localStorage.getItem('categoryOrder');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [categoryOrder, setCategoryOrder] = useState([]);
   const [hiddenCategories, setHiddenCategories] = useState(() => {
     const saved = localStorage.getItem('hiddenCategories');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Сохраняем в localStorage при изменениях
+  // Загружаем порядок из БД через категории (они должны приходить отсортированными)
   useEffect(() => {
-    localStorage.setItem('categoryOrder', JSON.stringify(categoryOrder));
-  }, [categoryOrder]);
+    const loadOrderFromServer = async () => {
+      try {
+        const response = await getAllCategories();
+        // Сервер уже должен возвращать категории, отсортированные по displayOrder
+        // Но на всякий случай сортируем еще раз
+        const sortedCategories = [...response.data].sort((a, b) => 
+          (a.displayOrder ?? 0) - (b.displayOrder ?? 0)
+        );
+        const orderFromServer = sortedCategories.map(cat => cat.id);
+        setCategoryOrder(orderFromServer);
+      } catch (error) {
+        console.error('Ошибка при загрузке порядка категорий:', error);
+      }
+    };
 
+    loadOrderFromServer();
+  }, []);
+
+  // Сохраняем скрытые категории в localStorage
   useEffect(() => {
     localStorage.setItem('hiddenCategories', JSON.stringify(hiddenCategories));
   }, [hiddenCategories]);
@@ -41,22 +53,12 @@ export const CategoryOrderProvider = ({ children }) => {
 
   // Функция для получения отсортированных и отфильтрованных категорий
   const getVisibleCategories = (allCategories) => {
-    if (!allCategories) return [];
+    if (!allCategories || allCategories.length === 0) return [];
     
-    // Сначала применяем пользовательский порядок, если есть
-    let orderedCategories = [...allCategories];
-    
-    if (categoryOrder.length > 0) {
-      orderedCategories.sort((a, b) => {
-        const indexA = categoryOrder.indexOf(a.id);
-        const indexB = categoryOrder.indexOf(b.id);
-        
-        if (indexA === -1 && indexB === -1) return a.id - b.id;
-        if (indexA === -1) return 1;
-        if (indexB === -1) return -1;
-        return indexA - indexB;
-      });
-    }
+    // Сортируем по displayOrder из самих категорий
+    let orderedCategories = [...allCategories].sort((a, b) => 
+      (a.displayOrder ?? 0) - (b.displayOrder ?? 0)
+    );
 
     // Фильтруем скрытые
     return orderedCategories.filter(cat => !hiddenCategories.includes(cat.id));

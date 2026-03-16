@@ -2,19 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCategories } from '../../context/CategoryContext';
-import { useCategoryOrder } from '../../context/CategoryOrderContext'; // Добавляем импорт
+import { useCategoryOrder } from '../../context/CategoryOrderContext';
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from '../../api/categories';
 import { getSubcategoriesByCategoryId, createSubcategory, updateSubcategory, deleteSubcategory } from '../../api/subcategories';
+import UserManagement from './UserManagement';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, refreshUserData } = useAuth();
   const { refreshCategories } = useCategories();
-  const { categoryOrder, hiddenCategories } = useCategoryOrder(); // Получаем порядок и скрытые категории
+  const { categoryOrder, hiddenCategories } = useCategoryOrder();
   
   const [categories, setCategories] = useState([]);
-  const [orderedCategories, setOrderedCategories] = useState([]); // Новое состояние для отсортированных категорий
+  const [orderedCategories, setOrderedCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -25,11 +26,11 @@ const AdminPanel = () => {
   const [expandedCategories, setExpandedCategories] = useState({});
 
   // Проверка прав доступа
-  useEffect(() => {
-    if (!isAuthenticated || user?.email !== 'admin123@admin.com') {
-      navigate('/announcements');
-    }
-  }, [isAuthenticated, user, navigate]);
+useEffect(() => {
+  if (!isAuthenticated || user?.role !== 'ROLE_ADMIN') {
+    navigate('/announcements');
+  }
+}, [isAuthenticated, user, navigate]);
 
   useEffect(() => {
     loadCategories();
@@ -80,9 +81,9 @@ const AdminPanel = () => {
 
   // Функция для обновления всех данных после изменений
   const refreshAllData = async () => {
-    await loadCategories(); // Обновляем локальное состояние
+    await loadCategories();
     if (refreshCategories) {
-      await refreshCategories(); // Обновляем контекст (это обновит Header)
+      await refreshCategories();
     }
   };
 
@@ -210,9 +211,9 @@ const AdminPanel = () => {
     }));
   };
 
-  if (!isAuthenticated || user?.email !== 'admin123@admin.com') {
-    return null;
-  }
+if (!isAuthenticated || user?.role !== 'ROLE_ADMIN') {
+  return null;
+}
 
   return (
     <div className="admin-panel">
@@ -270,7 +271,7 @@ const AdminPanel = () => {
             </div>
           ) : (
             <div className="categories-list">
-              {orderedCategories.map(category => ( // Используем orderedCategories вместо categories
+              {orderedCategories.map(category => (
                 <div key={category.id} className="category-item">
                   <div className="category-header">
                     {editingCategory?.id === category.id ? (
@@ -415,6 +416,12 @@ const AdminPanel = () => {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Новая секция: Управление пользователями */}
+        <div className="admin-section">
+          <h2>Управление пользователями</h2>
+          <UserManagement />
         </div>
       </div>
     </div>

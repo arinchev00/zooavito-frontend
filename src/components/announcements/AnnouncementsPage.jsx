@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useCategories } from '../../context/CategoryContext'; // ← добавить
+import { useCategories } from '../../context/CategoryContext';
 import { getAllAnnouncements } from '../../api/announcements';
 import AnnouncementCard from './AnnouncementCard';
 import AnnouncementFilter from './AnnouncementFilter';
 
 const AnnouncementsPage = () => {
   const { isAuthenticated } = useAuth();
-  const { categories } = useCategories(); // ← добавить
+  const { categories } = useCategories();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [subcategoryNames, setSubcategoryNames] = useState({}); // ← храним названия подкатегорий
+  const [subcategoryNames, setSubcategoryNames] = useState({});
   
   const categoryId = searchParams.get('categoryId');
   const subcategoryId = searchParams.get('subcategoryId');
