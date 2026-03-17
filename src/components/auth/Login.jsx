@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import ReCAPTCHA from "react-google-recaptcha"; // Другой импорт!
 import { useAuth } from '../../context/AuthContext';
 import { login } from '../../api/auth';
 import './Auth.css';
@@ -7,12 +8,14 @@ import './Auth.css';
 const Login = () => {
   const navigate = useNavigate();
   const { login: authLogin } = useAuth();
+  const captchaRef = useRef(null); // Создаем ref для капчи
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null); // Состояние для токена
 
   const handleChange = (e) => {
     setFormData({
@@ -21,18 +24,36 @@ const Login = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
+  // Функция вызывается при успешном прохождении капчи
+  const onCaptchaChange = (token) => {
+    console.log('reCAPTCHA token получен:', token);
+    setCaptchaToken(token);
+  };
+
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
+
+    // Получаем токен из ref (альтернативный способ)
+    const token = captchaRef.current?.getValue();
+    
+    if (!token) {
+      setError('Пожалуйста, подтвердите, что вы не робот');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const response = await login(formData);
-      const { token, user } = response.data;
+      const response = await login({
+        email: formData.email,
+        password: formData.password,
+        recaptchaToken: token
+      });
       
-      console.log('Данные пользователя:', user);
+      const { token: jwtToken, user } = response.data;
       
-      authLogin(token, {
+      authLogin(jwtToken, {
         id: user.id,
         fullName: user.fullName,
         phone: user.telephoneNumber,
@@ -43,24 +64,19 @@ const Login = () => {
       navigate('/home');
     } catch (error) {
       console.error('Login error:', error);
-      console.error('Error response data:', error.response?.data);
       
-      // Проверяем наличие сообщения в ответе
+      // Сбрасываем капчу при ошибке
+      captchaRef.current?.reset();
+      setCaptchaToken(null);
+      
       if (error.response?.data) {
-        // Проверяем поле account (оно приходит с бэкенда)
-        if (error.response.data.account) {
+        if (error.response.data.recaptchaToken) {
+          setError(error.response.data.recaptchaToken);
+        } else if (error.response.data.account) {
           setError(error.response.data.account);
-        }
-        // Проверяем поле message
-        else if (error.response.data.message) {
+        } else if (error.response.data.message) {
           setError(error.response.data.message);
-        }
-        // Если это строка
-        else if (typeof error.response.data === 'string') {
-          setError(error.response.data);
-        }
-        // Если ничего не нашли
-        else {
+        } else {
           setError('Ошибка при входе. Проверьте email и пароль.');
         }
       } else {
@@ -69,7 +85,7 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, authLogin, navigate]);
 
   return (
     <div className="container">
@@ -110,10 +126,22 @@ const Login = () => {
                 />
               </div>
 
+              {/* ВИДИМАЯ КАПЧА */}
+              <div className="form-group">
+                <ReCAPTCHA
+                  ref={captchaRef}
+                  sitekey="6Ldnl40sAAAAANTuZ7EgfK42S21G4ZdbuPW0v4Qo" // Новый ключ!
+                  onChange={onCaptchaChange}
+                  theme="light"
+                  size="normal"
+                  hl="ru" // Русский язык
+                />
+              </div>
+
               <button 
                 className="btn btn-primary btn-block mt-4" 
                 type="submit"
-                disabled={loading}
+                disabled={loading || !captchaToken}
               >
                 {loading ? 'Вход...' : 'Войти'}
               </button>

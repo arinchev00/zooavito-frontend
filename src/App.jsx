@@ -1,9 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+// import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3'; // 👈 УДАЛИТЬ
 import { AuthProvider } from './context/AuthContext';
 import { CategoryProvider } from './context/CategoryContext';
 import { CategoryOrderProvider } from './context/CategoryOrderContext';
-import RequireAuth from './components/common/RequireAuth'; // Импортируем компонент
+import RequireAuth from './components/common/RequireAuth';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import Home from './components/Home';
@@ -22,6 +23,7 @@ import Profile from './components/profile/Profile';
 function App() {
   return (
     <Router>
+      {/* 👇 УБИРАЕМ GoogleReCaptchaProvider - он не нужен для v2 */}
       <AuthProvider>
         <CategoryProvider>
           <CategoryOrderProvider>
@@ -36,7 +38,7 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/login" element={<Login />} />
 
-                {/* Защищенные маршруты - требуют авторизации */}
+                {/* Защищенные маршруты */}
                 <Route 
                   path="/announcements/create" 
                   element={

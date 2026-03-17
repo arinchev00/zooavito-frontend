@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import ReCAPTCHA from "react-google-recaptcha";
 import { register } from '../../api/auth';
 import './Auth.css';
 
 const Register = () => {
   const navigate = useNavigate();
+  const captchaRef = useRef(null);
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -14,6 +16,8 @@ const Register = () => {
   });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null); // 👈 Добавлено
 
   const handleChange = (e) => {
     setFormData({
@@ -22,63 +26,84 @@ const Register = () => {
     });
   };
 
-const formatPhoneNumber = (value) => {
-  let numbers = value.replace(/\D/g, '');
-  
-  if (numbers.length > 0) {
-    // Если первая цифра 8 или 7, заменяем на 7
-    if (numbers[0] === '8' || numbers[0] === '7') {
-      numbers = '7' + numbers.substring(1);
-    }
+  const formatPhoneNumber = (value) => {
+    let numbers = value.replace(/\D/g, '');
     
-    // Форматируем как +7(999)999-99-99 (БЕЗ ПРОБЕЛОВ)
-    let formatted = '+7';
-    
-    if (numbers.length > 1) {
-      formatted += '(' + numbers.substring(1, 4);
+    if (numbers.length > 0) {
+      if (numbers[0] === '8' || numbers[0] === '7') {
+        numbers = '7' + numbers.substring(1);
+      }
+      
+      let formatted = '+7';
+      
+      if (numbers.length > 1) {
+        formatted += '(' + numbers.substring(1, 4);
+      }
+      if (numbers.length >= 5) {
+        formatted += ')' + numbers.substring(4, 7);
+      }
+      if (numbers.length >= 8) {
+        formatted += '-' + numbers.substring(7, 9);
+      }
+      if (numbers.length >= 10) {
+        formatted += '-' + numbers.substring(9, 11);
+      }
+      
+      return formatted;
     }
-    if (numbers.length >= 5) {
-      formatted += ')' + numbers.substring(4, 7);
-    }
-    if (numbers.length >= 8) {
-      formatted += '-' + numbers.substring(7, 9);
-    }
-    if (numbers.length >= 10) {
-      formatted += '-' + numbers.substring(9, 11);
-    }
-    
-    return formatted;
-  }
-  return value;
-};
+    return value;
+  };
 
   const handlePhoneChange = (e) => {
     const formatted = formatPhoneNumber(e.target.value);
     setFormData({ ...formData, telephoneNumber: formatted });
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setErrors({});
-  setServerError('');
+  const onCaptchaChange = (token) => {
+    setCaptchaToken(token);
+  };
 
-  // НЕ очищаем телефон от форматирования!
-  // const cleanPhone = formData.telephoneNumber.replace(/\D/g, ''); ← удалите это
-  
-  try {
-    await register({
-      ...formData,
-      // telephoneNumber: cleanPhone  ← не используем
-    });
-    navigate('/login', { state: { message: 'Регистрация успешна! Теперь вы можете войти.' } });
-  } catch (error) {
-    if (error.response?.data) {
-      setErrors(error.response.data);
-    } else {
-      setServerError('Ошибка при регистрации. Попробуйте позже.');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrors({});
+    setServerError('');
+
+    // 👇 ТЕПЕРЬ ПРОВЕРКА ВНУТРИ ФУНКЦИИ - ВСЁ ПРАВИЛЬНО
+    if (!captchaToken) {
+      setServerError('Пожалуйста, подтвердите, что вы не робот');
+      return;
     }
-  }
-};
+
+    setLoading(true);
+
+    try {
+      await register({
+        fullName: formData.fullName,
+        email: formData.email,
+        telephoneNumber: formData.telephoneNumber,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        recaptchaToken: captchaToken
+      });
+      
+      navigate('/login', { state: { message: 'Регистрация успешна! Теперь вы можете войти.' } });
+    } catch (error) {
+      captchaRef.current?.reset();
+      setCaptchaToken(null);
+      
+      if (error.response?.data) {
+        if (error.response.data.recaptchaToken) {
+          setServerError(error.response.data.recaptchaToken);
+        } else {
+          setErrors(error.response.data);
+        }
+      } else {
+        setServerError('Ошибка при регистрации. Попробуйте позже.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="container">
@@ -174,8 +199,24 @@ const handleSubmit = async (e) => {
                 <small className="form-text text-muted">Пароль должен совпадать с введенным ранее значением</small>
               </div>
 
-              <button className="btn btn-primary btn-block mt-4" type="submit">
-                Зарегистрироваться
+              {/* 👇 ВИДИМАЯ КАПЧА */}
+              <div className="form-group">
+                <ReCAPTCHA
+                  ref={captchaRef}
+                  sitekey="6Ldnl40sAAAAANTuZ7EgfK42S21G4ZdbuPW0v4Qo"
+                  onChange={onCaptchaChange}
+                  theme="light"
+                  size="normal"
+                  hl="ru"
+                />
+              </div>
+
+              <button 
+                className="btn btn-primary btn-block mt-4" 
+                type="submit"
+                disabled={loading || !captchaToken}
+              >
+                {loading ? 'Регистрация...' : 'Зарегистрироваться'}
               </button>
 
               <div className="auth-footer">
