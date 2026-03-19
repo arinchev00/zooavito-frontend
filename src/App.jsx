@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-// import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3'; // 👈 УДАЛИТЬ
 import { AuthProvider } from './context/AuthContext';
 import { CategoryProvider } from './context/CategoryContext';
 import { CategoryOrderProvider } from './context/CategoryOrderContext';

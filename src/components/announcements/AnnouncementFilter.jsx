@@ -40,15 +40,15 @@ const AnnouncementFilter = ({ initialFilters = {}, onFilterChange }) => {
     });
   }, [initialFilters]);
 
-  const loadSubcategories = async (categoryId) => {
-    try {
-      const response = await fetch(`http://localhost:8081/v1/api/subcategories/by-category/${categoryId}`);
-      const data = await response.json();
-      setSubcategories(data);
-    } catch (error) {
-      console.error('Ошибка при загрузке подкатегорий:', error);
-    }
-  };
+const loadSubcategories = async (categoryId) => {
+  try {
+    const response = await fetch(`http://localhost:8081/v1/api/subcategories/by-category/${categoryId}`);
+    const data = await response.json();
+    setSubcategories(data);
+  } catch (error) {
+    console.error('Ошибка при загрузке подкатегорий:', error);
+  }
+};
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;

@@ -24,7 +24,7 @@ const AnnouncementDetail = () => {
   useEffect(() => {
     console.log('Current user:', user);
     console.log('User email:', user?.email);
-    console.log('Is admin?', user?.email === 'admin123@admin.com');
+    console.log('Is admin?', user?.role === 'ROLE_ADMIN');
   }, [user]);
 
   useEffect(() => {
@@ -131,20 +131,28 @@ const AnnouncementDetail = () => {
     }
   };
 
-  // Проверка на админа по email (временное решение)
-  const isAdmin = user?.email === 'admin123@admin.com';
+  // Проверка на админа (по роли, а не по email)
+  const isAdmin = user?.role === 'ROLE_ADMIN';
 
-  // Проверка прав на редактирование/удаление комментария
+  // Проверка прав на редактирование комментария (админ или автор)
   const canEditComment = (comment) => {
     if (!isAuthenticated) return false;
     
-    // Админ может всё
+    // Админ может редактировать любые комментарии
     if (isAdmin) return true;
     
-    // Владелец объявления может управлять всеми комментариями под своим объявлением
-    if (announcement?.user?.email === user?.email) return true;
+    // Автор может редактировать свой комментарий
+    return comment.author?.email === user?.email;
+  };
+
+  // Проверка прав на удаление комментария (админ или автор)
+  const canDeleteComment = (comment) => {
+    if (!isAuthenticated) return false;
     
-    // Автор может редактировать/удалять свой комментарий
+    // Админ может удалять любые комментарии
+    if (isAdmin) return true;
+    
+    // Автор может удалять свой комментарий
     return comment.author?.email === user?.email;
   };
 
@@ -396,23 +404,28 @@ const AnnouncementDetail = () => {
                         {formatDate(comment.createdAt)}
                       </span>
                       
-                      {/* Кнопки действий (только если есть права) */}
-                      {canEditComment(comment) && (
+                      {/* Кнопки действий (только админ или автор) */}
+                      {(canEditComment(comment) || canDeleteComment(comment)) && (
                         <div className="comment-actions">
-                          <button
-                            onClick={() => handleEditClick(comment)}
-                            className="btn btn-sm btn-warning"
-                            title="Редактировать"
-                          >
-                            <i className="fas fa-edit"></i>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="btn btn-sm btn-danger"
-                            title="Удалить"
-                          >
-                            <i className="fas fa-trash"></i>
-                          </button>
+                          {canEditComment(comment) && (
+                            <button
+                              onClick={() => handleEditClick(comment)}
+                              className="btn btn-sm btn-warning"
+                              title="Редактировать"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </button>
+                          )}
+                          
+                          {canDeleteComment(comment) && (
+                            <button
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className="btn btn-sm btn-danger"
+                              title="Удалить"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
